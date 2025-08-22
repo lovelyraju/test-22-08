@@ -1,0 +1,45 @@
+packer {
+  required_plugins {
+    amazon = {
+      source  = "github.com/hashicorp/amazon"
+      version = "~> 1"
+    }
+  }
+}
+
+source "amazon-ebs" "base_ami" {
+  ami_name      = "my-base-ami-{{timestamp}}"
+  instance_type = "t2.micro"
+  region        = "us-east-1"
+  source_ami_filter {
+    filters = {
+      name                = "amzn2-ami-hvm-*-x86_64-gp2"
+      virtualization-type = "hvm"
+    }
+    most_recent = true
+    owners      = ["amazon"]
+  }
+  ssh_username = "ec2-user"
+
+  # IAM instance profile for Packer to create temp resources
+  iam_instance_profile = "packer_build_profile" # Ensure this profile exists with necessary permissions
+}
+
+build {
+  sources = ["source.amazon-ebs.base_ami"]
+  provisioner "shell" {
+    inline = [
+      "sudo yum update -y",
+      "sudo yum install -y epel-release",
+      "sudo yum install -y nginx", # Example: Install Nginx
+      "sudo systemctl enable nginx",
+      "sudo systemctl start nginx"
+    ]
+  }
+
+  # Optional: Post-processor to upload manifest to S3
+  post-processor "manifest" {
+    output     = "manifest.json"
+    strip_path = true
+  }
+}
